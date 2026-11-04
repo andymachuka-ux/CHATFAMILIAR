@@ -149,7 +149,7 @@
         }
         const database = firebase.database();
 
-        // Sonido general unificado apuntando al archivo MPES/MP3 que subiste a GitHub
+        // Sonido general unificado apuntando al archivo de audio local
         const sonidoNotificacion = new Audio('WhatsApp Audio 2026-11-04 at 12.23.54 AM.mpeg');
 
         // Variables de Estado Local
@@ -249,10 +249,19 @@
                 const listaMensajes = Object.values(mensajes);
                 const cantidadActual = listaMensajes.length;
 
-                // Reproducir sonido general si llega un mensaje nuevo de otro usuario
+                // Validar si hay un mensaje nuevo y verificar que NO sea enviado por mí antes de sonar
                 if (!esPrimeraCargaHistorial && cantidadActual > totalMensajesPrevios) {
-                    sonidoNotificacion.currentTime = 0;
-                    sonidoNotificacion.play().catch(err => console.log("Audio en espera de interacción de usuario"));
+                    const ultimoMensaje = listaMensajes[listaMensajes.length - 1];
+                    
+                    // Solo suena y vibra si el último mensaje NO fue escrito por este usuario
+                    if (ultimoMensaje && ultimoMensaje.usuario !== miNombre) {
+                        sonidoNotificacion.currentTime = 0;
+                        sonidoNotificacion.play().catch(err => console.log("Audio en espera de interacción de usuario"));
+                        
+                        if (navigator.vibrate) {
+                            navigator.vibrate(200);
+                        }
+                    }
                 }
 
                 totalMensajesPrevios = cantidadActual;
@@ -331,13 +340,15 @@
             if (data && data.activo) {
                 bannerCena.classList.remove('hidden');
 
-                // Si se activa, reproducir el sonido general y la vibración
+                // Si se activa y fue enviado por otro familiar, sonar y vibrar
                 if (!estadoCenaAnterior) {
-                    sonidoNotificacion.currentTime = 0;
-                    sonidoNotificacion.play().catch(err => console.log("Audio de cena bloqueado"));
+                    if (data.enviadoPor !== miNombre) {
+                        sonidoNotificacion.currentTime = 0;
+                        sonidoNotificacion.play().catch(err => console.log("Audio de cena bloqueado"));
 
-                    if (navigator.vibrate) {
-                        navigator.vibrate([300, 150, 300, 150, 300]);
+                        if (navigator.vibrate) {
+                            navigator.vibrate([300, 150, 300, 150, 300]);
+                        }
                     }
                 }
                 estadoCenaAnterior = true;

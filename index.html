@@ -12,6 +12,12 @@
         header { background-color: #202c33; padding: 10px 15px; display: flex; flex-direction: column; border-bottom: 1px solid #2f3b43; }
         header h2 { margin: 0; font-size: 16px; color: #e9edef; }
         .status-header { font-size: 11px; color: #00a884; margin-top: 3px; font-weight: normal; }
+        
+        /* BARRA DE SELECCIÓN DE CHAT */
+        .chat-selector { background-color: #111b21; padding: 8px 15px; border-bottom: 1px solid #2f3b43; display: flex; align-items: center; gap: 10px; }
+        .chat-selector label { font-size: 12px; color: #8696a0; font-weight: bold; }
+        .chat-selector select { background-color: #2a3942; color: #e9edef; border: 1px solid #00a884; border-radius: 12px; padding: 5px 10px; font-size: 13px; outline: none; flex: 1; }
+        
         #chat-container { flex: 1; padding: 15px; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; }
         .message { max-width: 75%; padding: 8px 12px; border-radius: 7.5px; position: relative; word-wrap: break-word; font-size: 14px; }
         .incoming { background-color: #202c33; align-self: flex-start; }
@@ -31,6 +37,16 @@
         <div id="status-display" class="status-header">Conectando...</div>
     </header>
 
+    <!-- MENU DESPLEGABLE DE CHATS -->
+    <div class="chat-selector">
+        <label for="select-chat">Canal:</label>
+        <select id="select-chat" onchange="cambiarCanal()">
+            <option value="general">🌐 Grupo General</option>
+            <option value="privado_mama">🔒 Privado con Mamá</option>
+            <option value="privado_hermano">🔒 Privado con Hermano</option>
+        </select>
+    </div>
+
     <div id="chat-container"></div>
 
     <footer>
@@ -45,7 +61,9 @@
         };
         firebase.initializeApp(firebaseConfig);
         const database = firebase.database();
-        const chatRef = database.ref('mensajes');
+        
+        let currentRef = null;
+        let activeChannel = 'general';
 
         // Manejo de Nombre de Usuario local
         let userName = localStorage.getItem('chat_username');
@@ -55,7 +73,7 @@
         }
         document.getElementById('display-name').innerText = userName;
 
-        // --- SISTEMA DE PRESENCIA (EN LÍNEA / ÚLTIMA VEZ) ---
+        // --- SISTEMA DE PRESENCIA ---
         const userStatusRef = database.ref('/presencia/' + userName);
         const connectedRef = database.ref('.info/connected');
 
@@ -93,7 +111,25 @@
             statusDiv.innerText = statusText.length > 0 ? statusText.join(' | ') : 'Esperando a otros familiares...';
         });
 
-        // --- MANEJO DE MENSAJES Y CHAT ---
+        // --- GESTIÓN DE CANALES Y MENSAJES ---
+        function cambiarCanal() {
+            activeChannel = document.getElementById('select-chat').value;
+            document.getElementById('chat-container').innerHTML = ''; // Limpiar pantalla
+            
+            if (currentRef) {
+                currentRef.off(); // Detener escucha del canal anterior
+            }
+
+            // Definir ruta en Firebase según el canal seleccionado
+            if (activeChannel === 'general') {
+                currentRef = database.ref('mensajes');
+            } else {
+                currentRef = database.ref('chats_privados/' + activeChannel);
+            }
+
+            escucharMensajes();
+        }
+
         function addMessageToDOM(autor, texto, isOutgoing, coords, timestamp) {
             const container = document.getElementById('chat-container');
             const msgDiv = document.createElement('div');
@@ -131,11 +167,31 @@
         }
 
         function enviarAFirebase(texto, coords) {
-            chatRef.push({
+            currentRef.push({
                 autor: userName,
                 texto: texto,
                 coords: coords,
                 timestamp: Date.now()
+            });
+        }
+
+        function escucharMensajes() {
+            currentRef.limitToLast(50).on('child_added', (snapshot) => {
+                const data = snapshot.val();
+                const isOutgoing = data.autor === userName;
+                
+                addMessageToDOM(data.autor, data.texto, isOutgoing, data.coords, data.timestamp);
+                
+                if (!isOutgoing) {
+                    if (window.Notification && Notification.permission === "granted") {
+                        new Notification("Mensaje de " + data.autor, {
+                            body: data.texto,
+                            icon: "https://cdn-icons-png.flaticon.com/512/733/733585.png"
+                        });
+                    } else if (window.Notification && Notification.permission !== "denied") {
+                        Notification.requestPermission();
+                    }
+                }
             });
         }
 
@@ -144,24 +200,8 @@
             if (e.key === 'Enter') sendMessage();
         };
 
-        // Escuchar mensajes entrantes en tiempo real con Notificación Nativa
-        chatRef.limitToLast(50).on('child_added', (snapshot) => {
-            const data = snapshot.val();
-            const isOutgoing = data.autor === userName;
-            
-            addMessageToDOM(data.autor, data.texto, isOutgoing, data.coords, data.timestamp);
-            
-            if (!isOutgoing) {
-                if (window.Notification && Notification.permission === "granted") {
-                    new Notification("Nuevo mensaje de " + data.autor, {
-                        body: data.texto,
-                        icon: "https://cdn-icons-png.flaticon.com/512/733/733585.png"
-                    });
-                } else if (window.Notification && Notification.permission !== "denied") {
-                    Notification.requestPermission();
-                }
-            }
-        });
+        // Iniciar en el canal General por defecto
+        cambiarCanal();
     </script>
 </body>
 </html>

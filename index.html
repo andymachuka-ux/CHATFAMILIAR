@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Chat Familiar</title>
     
-    <!-- Tailwind CSS CDN para diseño responsivo y moderno -->
+    <!-- Tailwind CSS CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
 
     <!-- Google Fonts (Inter) -->
@@ -14,7 +14,7 @@
     <!-- FontAwesome Icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 
-    <!-- Firebase SDK (Version Compatibilidad 9.23.0 para uso directo) -->
+    <!-- Firebase SDK (Version Compatibilidad 9.23.0) -->
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
 
@@ -25,54 +25,27 @@
             transition: background-color 0.15s ease;
         }
 
-        /* Personalización de barra de desplazamiento estilo oscuro */
-        ::-webkit-scrollbar {
-            width: 6px;
-        }
-        ::-webkit-scrollbar-track {
-            background: rgba(15, 23, 42, 0.6);
-        }
-        ::-webkit-scrollbar-thumb {
-            background: rgba(51, 65, 85, 0.8);
-            border-radius: 4px;
-        }
-        ::-webkit-scrollbar-thumb:hover {
-            background: rgba(71, 85, 105, 1);
-        }
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: rgba(15, 23, 42, 0.6); }
+        ::-webkit-scrollbar-thumb { background: rgba(51, 65, 85, 0.8); border-radius: 4px; }
 
-        /* Animación suave parpadeante para la Alerta Roja de la Cena */
         @keyframes alert-pulse {
-            0%, 100% {
-                background-color: #dc2626;
-                box-shadow: 0 0 15px rgba(220, 38, 38, 0.7);
-                transform: scale(1);
-            }
-            50% {
-                background-color: #ef4444;
-                box-shadow: 0 0 25px rgba(239, 68, 68, 0.9);
-                transform: scale(1.02);
-            }
+            0%, 100% { background-color: #dc2626; box-shadow: 0 0 15px rgba(220, 38, 38, 0.7); transform: scale(1); }
+            50% { background-color: #ef4444; box-shadow: 0 0 25px rgba(239, 68, 68, 0.9); transform: scale(1.02); }
         }
+        .alert-dinner-active { animation: alert-pulse 1s infinite ease-in-out; }
 
-        .alert-dinner-active {
-            animation: alert-pulse 1s infinite ease-in-out;
-        }
-
-        /* Animación de 3 destellos rojos seguidos para accesibilidad visual */
         @keyframes flash-triple-red {
             0%, 100% { background-color: #0f172a; }
             15%, 45%, 75% { background-color: #dc2626; }
             30%, 60% { background-color: #0f172a; }
         }
-
-        .flash-rojo-activo {
-            animation: flash-triple-red 1.2s ease-in-out;
-        }
+        .flash-rojo-activo { animation: flash-triple-red 1.2s ease-in-out; }
     </style>
 </head>
 <body id="bodyApp" class="bg-slate-900 text-slate-100 min-h-screen flex flex-col justify-between antialiased selection:bg-teal-500 selection:text-white">
 
-    <!-- Encabezado Principal de la App -->
+    <!-- Encabezado -->
     <header class="bg-slate-800/90 backdrop-blur-md border-b border-slate-700/80 p-4 sticky top-0 z-30 shadow-lg">
         <div class="max-w-2xl mx-auto flex justify-between items-center">
             <div class="flex items-center gap-3">
@@ -92,10 +65,10 @@
         </div>
     </header>
 
-    <!-- Contenido Principal -->
+    <!-- Contenido -->
     <main class="max-w-2xl w-full mx-auto flex-1 flex flex-col p-3 md:p-4 gap-3">
 
-        <!-- Selector de Conversación (Grupo General o Privados con Familiares) -->
+        <!-- Selector de Conversación -->
         <div class="bg-slate-800 p-3 rounded-2xl border border-slate-700/70 shadow-sm flex flex-col sm:flex-row gap-2.5 items-stretch sm:items-center justify-between">
             <label for="chatSelect" class="text-xs font-bold uppercase tracking-wider text-slate-400 flex items-center gap-2 pl-1">
                 <i class="fa-solid fa-comments text-teal-400 text-sm"></i> Chat:
@@ -103,7 +76,6 @@
             <div class="relative flex-1">
                 <select id="chatSelect" onchange="cambiarDestinoChat(this.value)" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-2.5 text-sm font-semibold text-slate-100 focus:outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500 appearance-none cursor-pointer">
                     <option value="general">🌐 Grupo General (Todos ven)</option>
-                    <!-- Los usuarios conectados se cargarán dinámicamente aquí para chat privado -->
                 </select>
                 <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3.5 text-slate-400">
                     <i class="fa-solid fa-chevron-down text-xs"></i>
@@ -111,34 +83,30 @@
             </div>
         </div>
 
-        <!-- Botón Exclusivo: ¡Ya esta la cena! -->
+        <!-- Botón Cena -->
         <div class="w-full">
             <button id="btnAvisarCena" onclick="avisarCena()" class="w-full bg-red-600 hover:bg-red-500 active:bg-red-700 text-white font-extrabold py-3.5 px-4 rounded-2xl shadow-lg transition-all duration-200 flex items-center justify-center gap-2 text-base tracking-wide border border-red-500/40 active:scale-[0.99]">
                 <span class="text-xl">🍲</span> ¡Ya esta la cena!
             </button>
         </div>
 
-        <!-- Banner Flotante de Alerta Roja -->
+        <!-- Banner Alerta -->
         <div id="bannerCena" class="hidden alert-dinner-active text-white p-4 rounded-2xl shadow-2xl border-2 border-red-300 text-center font-black text-lg sm:text-xl tracking-wider flex items-center justify-center gap-3">
             <span class="text-2xl">🚨</span> ¡YA ESTA LA CENA! <span class="text-2xl">🚨</span>
         </div>
 
-        <!-- Barra de Estado / Diagnóstico -->
+        <!-- Barra Estado -->
         <div class="bg-slate-800/90 border border-slate-700/60 rounded-xl px-3.5 py-2 text-xs font-mono flex justify-between items-center">
-            <span id="connectionStatus" class="text-emerald-400 font-semibold">
-                Estado: Conectado (WebSockets OK).
-            </span>
-            <span id="chatIndicatorBadge" class="text-xs bg-teal-500/20 text-teal-300 px-2 py-0.5 rounded-md font-sans">
-                Modo: Grupo General
-            </span>
+            <span id="connectionStatus" class="text-emerald-400 font-semibold">Estado: Conectado.</span>
+            <span id="chatIndicatorBadge" class="text-xs bg-teal-500/20 text-teal-300 px-2 py-0.5 rounded-md font-sans">Modo: Grupo General</span>
         </div>
 
-        <!-- Ventana de Chat en Tiempo Real -->
+        <!-- Ventana Chat -->
         <div id="chatMessages" class="flex-1 bg-slate-800/40 border border-slate-700/60 rounded-2xl p-4 overflow-y-auto max-h-[52vh] min-h-[320px] flex flex-col gap-3 shadow-inner">
             <div class="text-center text-xs text-slate-500 my-auto font-medium">Cargando mensajes...</div>
         </div>
 
-        <!-- Formulario de Envío de Mensajes -->
+        <!-- Formulario -->
         <form id="chatForm" onsubmit="enviarMensaje(event)" class="flex gap-2 items-center bg-slate-800 p-2 rounded-2xl border border-slate-700 shadow-xl">
             <input type="text" id="usernameInput" placeholder="Tu Nombre" class="w-1/3 min-w-[100px] bg-slate-900 border border-slate-700 text-slate-100 text-sm font-semibold rounded-xl px-3 py-2.5 focus:outline-none focus:border-teal-500">
             <input type="text" id="messageInput" placeholder="Escribe un mensaje..." required class="flex-1 bg-slate-900 border border-slate-700 text-slate-100 text-sm rounded-xl px-4 py-2.5 focus:outline-none focus:border-teal-500">
@@ -149,7 +117,6 @@
 
     </main>
 
-    <!-- JavaScript con Soporte de Grupo General y Chats Privados -->
     <script>
         const firebaseConfig = {
             databaseURL: "https://chatfamilia-386df-default-rtdb.firebaseio.com"
@@ -162,7 +129,7 @@
 
         const sonidoNotificacion = new Audio('WhatsApp Audio 2026-11-04 at 12.23.54 AM.mpeg');
 
-        let destinoActual = "general"; // Puede ser "general" o el nombre de otro usuario para chat privado
+        let destinoActual = "general";
         let miNombre = localStorage.getItem("chat_username") || "Andy ml";
         let totalMensajesPrevios = 0; 
         let esPrimeraCargaHistorial = true;
@@ -179,15 +146,19 @@
         const chatIndicatorBadge = document.getElementById("chatIndicatorBadge");
 
         inputNombre.value = miNombre;
+
+        // Limpiar caracteres extraños en nombres para evitar errores en las rutas de Firebase
+        function limpiarNombre(nombre) {
+            return nombre.trim().replace(/[.#$\/\[\]]/g, "_");
+        }
+
         inputNombre.addEventListener("change", (e) => {
-            const nuevoNombre = e.target.value.trim();
-            if (nuevoNombre && nuevoNombre !== miNombre) {
-                database.ref("presencia/" + miNombre).remove();
-                miNombre = nuevoNombre;
+            const limpio = limpiarNombre(e.target.value);
+            if (limpio && limpio !== limpiarNombre(miNombre)) {
+                database.ref("presencia/" + limpiarNombre(miNombre)).remove();
+                miNombre = limpio;
                 localStorage.setItem("chat_username", miNombre);
-                actualizarPresencia();
-                actualizarSelectorPrivados(listaFamiliaresConectados);
-                escucharConversacion(destinoActual);
+                registrarPresenciaYEscuchar();
             }
         });
 
@@ -196,37 +167,38 @@
 
         connectedRef.on("value", (snap) => {
             if (snap.val() === true) {
-                statusText.innerText = "Estado: Conectado (WebSockets OK).";
+                statusText.innerText = "Estado: Conectado.";
                 statusText.className = "text-emerald-400 font-semibold";
                 statusStar.className = "text-emerald-400 text-3xl transition-all duration-300 drop-shadow-md";
-
-                miPresenciaRef = database.ref("presencia/" + miNombre);
-                miPresenciaRef.onDisconnect().remove();
-                actualizarPresencia();
+                registrarPresenciaYEscuchar();
             } else {
-                statusText.innerText = "Estado: Desconectado. Reconectando...";
+                statusText.innerText = "Estado: Desconectado.";
                 statusText.className = "text-amber-400 font-semibold";
                 statusStar.className = "text-amber-500 text-3xl opacity-50";
             }
         });
 
-        function actualizarPresencia() {
-            if (miPresenciaRef) {
-                miPresenciaRef.set({
-                    online: true,
-                    ultimoAcceso: Date.now()
-                });
-            }
+        function registrarPresenciaYEscuchar() {
+            const nombreKey = limpiarNombre(miNombre);
+            miPresenciaRef = database.ref("presencia/" + nombreKey);
+            miPresenciaRef.set({ nombre: miNombre, online: true, ultimoAcceso: Date.now() });
+            miPresenciaRef.onDisconnect().remove();
         }
 
-        // Monitorear presencia y actualizar la lista de chats privados disponibles
+        // Monitorear presencia general de forma robusta
         database.ref("presencia").on("value", (snapshot) => {
             const data = snapshot.val();
             if (data) {
-                listaFamiliaresConectados = Object.keys(data);
-                
-                // Texto de subtítulo en el encabezado
-                const otros = listaFamiliaresConectados.filter(n => n !== miNombre);
+                listaFamiliaresConectados = [];
+                Object.values(datachl => {}).forEach // placeholder seguro
+                Object.keys(data).forEach(key => {
+                    const info = data[key];
+                    if (info && info.nombre) {
+                        listaFamiliaresConectados.push(info.nombre);
+                    }
+                });
+
+                const otros = listaFamiliaresConectados.filter(n => limpiarNombre(n) !== limpiarNombre(miNombre));
                 if (otros.length === 0) {
                     userPresenceSub.innerText = "Esperando a otros familiares...";
                 } else {
@@ -242,20 +214,17 @@
         });
 
         function actualizarSelectorPrivados(nombres) {
-            // Mantener la opción seleccionada actual
             const valorPrevio = chatSelect.value;
-            
             let opcionesHTML = `<option value="general">🌐 Grupo General (Todos ven)</option>`;
             
             nombres.forEach(nombre => {
-                if (nombre !== miNombre) {
-                    opcionesHTML += `<option value="privado_${obtenerIdPrivado(miNombre, nombre)}">🔒 Privado con: ${nombre}</option>`;
+                if (limpiarNombre(nombre) !== limpiarNombre(miNombre)) {
+                    const idPrivado = [limpiarNombre(miNombre), limpiarNombre(nombre)].sort().join("_to_");
+                    opcionesHTML += `<option value="privado_${idPrivado}">🔒 Privado con: ${nombre}</option>`;
                 }
             });
 
             chatSelect.innerHTML = opcionesHTML;
-            
-            // Intentar restaurar la selección si aún existe
             if ([...chatSelect.options].some(opt => opt.value === valorPrevio)) {
                 chatSelect.value = valorPrevio;
             } else {
@@ -264,39 +233,26 @@
             }
         }
 
-        // Generar un ID único y ordenado alfabéticamente para que ambos usuarios compartan la misma ruta privada
-        function obtenerIdPrivado(userA, userB) {
-            const ordenados = [userA, userB].sort();
-            return ordenados.join("_to_");
-        }
-
         let listenerChat = null;
 
         function dispararFlashRojo() {
             bodyApp.classList.remove('flash-rojo-activo');
             void bodyApp.offsetWidth; 
             bodyApp.classList.add('flash-rojo-activo');
-            setTimeout(() => {
-                bodyApp.classList.remove('flash-rojo-activo');
-            }, 1200);
+            setTimeout(() => { bodyApp.classList.remove('flash-rojo-activo'); }, 1200);
         }
 
         function escucharConversacion(destino) {
-            if (listenerChat) {
-                listenerChat.off();
-            }
+            if (listenerChat) listenerChat.off();
 
             chatContainer.innerHTML = '<div class="text-center text-xs text-slate-500 my-auto">Cargando mensajes...</div>';
             
-            let rutaFirebase = "";
+            let rutaFirebase = destino === "general" ? "chats_grupo/general" : `chats_privados/${destino.replace("privado_", "")}`;
+            
             if (destino === "general") {
-                rutaFirebase = "chats_grupo/general";
                 chatIndicatorBadge.innerText = "Modo: Grupo General";
                 chatIndicatorBadge.className = "text-xs bg-teal-500/20 text-teal-300 px-2 py-0.5 rounded-md font-sans";
             } else {
-                // Es un chat privado tipo "privado_Ana_to_Andy"
-                const idChatPrivado = destino.replace("privado_", "");
-                rutaFirebase = `chats_privados/${idChatPrivado}`;
                 chatIndicatorBadge.innerText = "Modo: Chat Privado 🔒";
                 chatIndicatorBadge.className = "text-xs bg-amber-500/20 text-amber-300 px-2 py-0.5 rounded-md font-sans";
             }
@@ -318,14 +274,11 @@
                 const listaMensajes = Object.values(mensajes);
                 const cantidadActual = listaMensajes.length;
 
-                // Validar si hay mensaje nuevo de OTRO usuario: sonar y dar el triple destello rojo
                 if (!esPrimeraCargaHistorial && cantidadActual > totalMensajesPrevios) {
                     const ultimoMensaje = listaMensajes[listaMensajes.length - 1];
-                    
                     if (ultimoMensaje && ultimoMensaje.usuario !== miNombre) {
                         sonidoNotificacion.currentTime = 0;
                         sonidoNotificacion.play().catch(err => console.log("Audio en espera"));
-                        
                         dispararFlashRojo();
                     }
                 }
@@ -364,16 +317,9 @@
             e.preventDefault();
             const inputMsg = document.getElementById("messageInput");
             const texto = inputMsg.value.trim();
-
             if (!texto) return;
 
-            let rutaFirebase = "";
-            if (destinoActual === "general") {
-                rutaFirebase = "chats_grupo/general";
-            } else {
-                const idChatPrivado = destinoActual.replace("privado_", "");
-                rutaFirebase = `chats_privados/${idChatPrivado}`;
-            }
+            let rutaFirebase = destinoActual === "general" ? "chats_grupo/general" : `chats_privados/${destinoActual.replace("privado_", "")}`;
 
             database.ref(rutaFirebase).push({
                 usuario: miNombre,
@@ -385,37 +331,23 @@
         }
 
         function escapeHTML(str) {
-            return str.replace(/[&<>'"]/g, 
-                tag => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[tag] || tag)
-            );
+            return str.replace(/[&<>'"]/g, tag => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[tag] || tag));
         }
 
         function avisarCena() {
-            database.ref('sistema/aviso_cena').set({
-                activo: true,
-                timestamp: Date.now(),
-                enviadoPor: miNombre
-            });
-
-            setTimeout(() => {
-                database.ref('sistema/aviso_cena').set({ activo: false });
-            }, 20000);
+            database.ref('sistema/aviso_cena').set({ activo: true, timestamp: Date.now(), enviadoPor: miNombre });
+            setTimeout(() => { database.ref('sistema/aviso_cena').set({ activo: false }); }, 20000);
         }
 
         let estadoCenaAnterior = false;
         database.ref('sistema/aviso_cena').on('value', (snapshot) => {
             const data = snapshot.val();
-            
             if (data && data.activo) {
                 bannerCena.classList.remove('hidden');
-
-                if (!estadoCenaAnterior) {
-                    if (data.enviadoPor !== miNombre) {
-                        sonidoNotificacion.currentTime, sonidoNotificacion.currentTime = 0;
-                        sonidoNotificacion.play().catch(err => console.log("Audio de cena bloqueado"));
-
-                        dispararFlashRojo();
-                    }
+                if (!estadoCenaAnterior && data.enviadoPor !== miNombre) {
+                    sonidoNotificacion.currentTime = 0;
+                    sonidoNotificacion.play().catch(err => console.log("Audio cena bloqueado"));
+                    dispararFlashRojo();
                 }
                 estadoCenaAnterior = true;
             } else {

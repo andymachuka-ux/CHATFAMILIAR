@@ -149,9 +149,14 @@
         }
         const database = firebase.database();
 
+        // Sonido general unificado apuntando al archivo MPES/MP3 que subiste a GitHub
+        const sonidoNotificacion = new Audio('WhatsApp Audio 2026-11-04 at 12.23.54 AM.mpeg');
+
         // Variables de Estado Local
         let canalActual = "general";
         let miNombre = localStorage.getItem("chat_username") || "Andy ml";
+        let totalMensajesPrevios = 0; 
+        let esPrimeraCargaHistorial = true;
         
         // Referencias a Elementos HTML
         const inputNombre = document.getElementById("usernameInput");
@@ -166,7 +171,6 @@
         inputNombre.addEventListener("change", (e) => {
             const nuevoNombre = e.target.value.trim();
             if (nuevoNombre) {
-                // Eliminar nodo previo si cambia de nombre
                 database.ref("presencia/" + miNombre).remove();
                 miNombre = nuevoNombre;
                 localStorage.setItem("chat_username", miNombre);
@@ -184,7 +188,6 @@
                 statusText.className = "text-emerald-400 font-semibold";
                 statusStar.className = "text-emerald-400 text-3xl transition-all duration-300 drop-shadow-md";
 
-                // Registrar Presencia y configurar desconexión automática
                 miPresenciaRef = database.ref("presencia/" + miNombre);
                 miPresenciaRef.onDisconnect().remove();
                 actualizarPresencia();
@@ -229,6 +232,8 @@
 
             chatContainer.innerHTML = '<div class="text-center text-xs text-slate-500 my-auto">Cargando mensajes...</div>';
             listenerCanal = database.ref(`chats_privados/${canal}`);
+            
+            esPrimeraCargaHistorial = true;
 
             listenerCanal.limitToLast(60).on("value", (snapshot) => {
                 chatContainer.innerHTML = "";
@@ -236,10 +241,24 @@
 
                 if (!mensajes) {
                     chatContainer.innerHTML = '<div class="text-center text-xs text-slate-500 my-auto">No hay mensajes aún. ¡Escribe el primero!</div>';
+                    totalMensajesPrevios = 0;
+                    esPrimeraCargaHistorial = false;
                     return;
                 }
 
-                Object.values(mensajes).forEach((msg) => {
+                const listaMensajes = Object.values(mensajes);
+                const cantidadActual = listaMensajes.length;
+
+                // Reproducir sonido general si llega un mensaje nuevo de otro usuario
+                if (!esPrimeraCargaHistorial && cantidadActual > totalMensajesPrevios) {
+                    sonidoNotificacion.currentTime = 0;
+                    sonidoNotificacion.play().catch(err => console.log("Audio en espera de interacción de usuario"));
+                }
+
+                totalMensajesPrevios = cantidadActual;
+                esPrimeraCargaHistorial = false;
+
+                listaMensajes.forEach((msg) => {
                     const esMio = msg.usuario === miNombre;
                     const msgDiv = document.createElement("div");
                     msgDiv.className = `flex flex-col ${esMio ? "items-end" : "items-start"}`;
@@ -305,18 +324,26 @@
         }
 
         // Escuchador global en tiempo real para el aviso de cena
+        let estadoCenaAnterior = false;
         database.ref('sistema/aviso_cena').on('value', (snapshot) => {
             const data = snapshot.val();
             
             if (data && data.activo) {
                 bannerCena.classList.remove('hidden');
 
-                // Hacer vibrar el móvil si el sistema lo soporta
-                if (navigator.vibrate) {
-                    navigator.vibrate([300, 150, 300, 150, 300]);
+                // Si se activa, reproducir el sonido general y la vibración
+                if (!estadoCenaAnterior) {
+                    sonidoNotificacion.currentTime = 0;
+                    sonidoNotificacion.play().catch(err => console.log("Audio de cena bloqueado"));
+
+                    if (navigator.vibrate) {
+                        navigator.vibrate([300, 150, 300, 150, 300]);
+                    }
                 }
+                estadoCenaAnterior = true;
             } else {
                 bannerCena.classList.add('hidden');
+                estadoCenaAnterior = false;
             }
         });
 

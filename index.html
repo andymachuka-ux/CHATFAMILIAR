@@ -1,75 +1,329 @@
-<!-- ========================================== -->
-<!-- 1. BOTÓN Y BANNER (Pégalo debajo de tu selector de canal) -->
-<!-- ========================================== -->
-<div style="margin: 12px 0; text-align: center;">
-    <!-- Botón de aviso -->
-    <button id="btnAvisarCena" onclick="avisarCena()" style="
-        background-color: #d9534f; 
-        color: white; 
-        border: none; 
-        padding: 12px 20px; 
-        border-radius: 8px; 
-        font-size: 15px;
-        font-weight: bold; 
-        cursor: pointer;
-        width: 100%;
-        box-shadow: 0 3px 6px rgba(0,0,0,0.3);
-    ">
-        🍲 ¡Ya esta la cena!
-    </button>
-</div>
-
-<!-- Banner de alerta en rojo -->
-<div id="bannerCena" style="
-    display: none; 
-    background-color: #d9534f; 
-    color: white; 
-    padding: 14px; 
-    border-radius: 8px; 
-    margin-bottom: 12px; 
-    text-align: center; 
-    font-size: 17px;
-    font-weight: bold;
-    box-shadow: 0 2px 5px rgba(0,0,0,0.3);
-">
-    🚨 ¡YA ESTA LA CENA!
-</div>
-
-
-<!-- ========================================== -->
-<!-- 2. LÓGICA DE FIREBASE (Pégalo en tu sección de Scripts JS) -->
-<!-- ========================================== -->
-<script>
-// Función al presionar el botón
-function avisarCena() {
-    // Activa la señal en la base de datos en tiempo real
-    firebase.database().ref('sistema/aviso_cena').set({
-        activo: true,
-        timestamp: Date.now()
-    });
-
-    // Se apaga automáticamente la alerta visual en los teléfonos después de 20 segundos
-    setTimeout(() => {
-        firebase.database().ref('sistema/aviso_cena').set({ activo: false });
-    }, 20000);
-}
-
-// Escuchador en tiempo real para todos los dispositivos conectados
-firebase.database().ref('sistema/aviso_cena').on('value', (snapshot) => {
-    const data = snapshot.val();
-    const banner = document.getElementById('bannerCena');
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Chat Familiar</title>
     
-    if (banner) {
-        if (data && data.activo) {
-            banner.style.display = 'block';
-            
-            // Hace vibrar el celular si el dispositivo lo soporta
-            if (navigator.vibrate) {
-                navigator.vibrate([300, 150, 300, 150, 300]);
-            }
-        } else {
-            banner.style.display = 'none';
+    <!-- Tailwind CSS CDN para diseño responsivo y moderno -->
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <!-- Google Fonts (Inter) -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <!-- Firebase SDK (Version Compatibilidad 9.23.0 para uso directo) -->
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            -webkit-tap-highlight-color: transparent;
         }
-    }
-});
-</script>
+
+        /* Personalización de barra de desplazamiento estilo oscuro */
+        ::-webkit-scrollbar {
+            width: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: rgba(15, 23, 42, 0.6);
+        }
+        ::-webkit-scrollbar-thumb {
+            background: rgba(51, 65, 85, 0.8);
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: rgba(71, 85, 105, 1);
+        }
+
+        /* Animación suave parpadeante para la Alerta Roja de la Cena */
+        @keyframes alert-pulse {
+            0%, 100% {
+                background-color: #dc2626;
+                box-shadow: 0 0 15px rgba(220, 38, 38, 0.7);
+                transform: scale(1);
+            }
+            50% {
+                background-color: #ef4444;
+                box-shadow: 0 0 25px rgba(239, 68, 68, 0.9);
+                transform: scale(1.02);
+            }
+        }
+
+        .alert-dinner-active {
+            animation: alert-pulse 1s infinite ease-in-out;
+        }
+    </style>
+</head>
+<body class="bg-slate-900 text-slate-100 min-h-screen flex flex-col justify-between antialiased selection:bg-teal-500 selection:text-white">
+
+    <!-- Encabezado Principal de la App -->
+    <header class="bg-slate-800/90 backdrop-blur-md border-b border-slate-700/80 p-4 sticky top-0 z-30 shadow-lg">
+        <div class="max-w-2xl mx-auto flex justify-between items-center">
+            <div class="flex items-center gap-3">
+                <div class="bg-teal-500 text-slate-950 p-2.5 rounded-2xl shadow-md flex items-center justify-center">
+                    <i class="fa-solid fa-house-chimney text-xl"></i>
+                </div>
+                <div>
+                    <h1 class="font-extrabold text-2xl leading-none text-white tracking-tight">chatfamiliar</h1>
+                    <p id="userPresenceSub" class="text-xs text-teal-400 font-semibold mt-1">Conectando...</p>
+                </div>
+            </div>
+            <div class="flex items-center gap-2">
+                <!-- Indicador visual de presencia / conexión WebSocket -->
+                <span id="statusStar" class="text-emerald-400 text-3xl transition-all duration-300 drop-shadow-md">
+                    <i class="fa-solid fa-star"></i>
+                </span>
+            </div>
+        </div>
+    </header>
+
+    <!-- Contenido Principal -->
+    <main class="max-w-2xl w-full mx-auto flex-1 flex flex-col p-3 md:p-4 gap-3">
+
+        <!-- Selector de Canal -->
+        <div class="bg-slate-800 p-3 rounded-2xl border border-slate-700/70 shadow-sm flex flex-col sm:flex-row gap-2.5 items-stretch sm:items-center justify-between">
+            <label for="channelSelect" class="text-xs font-bold uppercase tracking-wider text-slate-400 flex items-center gap-2 pl-1">
+                <i class="fa-solid fa-globe text-teal-400 text-sm"></i> Canal:
+            </label>
+            <div class="relative flex-1">
+                <select id="channelSelect" onchange="cambiarCanal(this.value)" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-2.5 text-sm font-semibold text-slate-100 focus:outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500 appearance-none cursor-pointer">
+                    <option value="general">🌐 Grupo General</option>
+                    <option value="compras">🛒 Lista de Compras</option>
+                    <option value="urgente">⚡ Avisos Rápidos</option>
+                </select>
+                <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3.5 text-slate-400">
+                    <i class="fa-solid fa-chevron-down text-xs"></i>
+                </div>
+            </div>
+        </div>
+
+        <!-- Botón Exclusivo: ¡Ya esta la cena! -->
+        <div class="w-full">
+            <button id="btnAvisarCena" onclick="avisarCena()" class="w-full bg-red-600 hover:bg-red-500 active:bg-red-700 text-white font-extrabold py-3.5 px-4 rounded-2xl shadow-lg transition-all duration-200 flex items-center justify-center gap-2 text-base tracking-wide border border-red-500/40 active:scale-[0.99]">
+                <span class="text-xl">🍲</span> ¡Ya esta la cena!
+            </button>
+        </div>
+
+        <!-- Banner Flotante de Alerta Roja (Sincronizado en tiempo real) -->
+        <div id="bannerCena" class="hidden alert-dinner-active text-white p-4 rounded-2xl shadow-2xl border-2 border-red-300 text-center font-black text-lg sm:text-xl tracking-wider flex items-center justify-center gap-3">
+            <span class="text-2xl">🚨</span> ¡YA ESTA LA CENA! <span class="text-2xl">🚨</span>
+        </div>
+
+        <!-- Barra de Estado / Diagnóstico -->
+        <div class="bg-slate-800/90 border border-slate-700/60 rounded-xl px-3.5 py-2 text-xs font-mono">
+            <span id="connectionStatus" class="text-emerald-400 font-semibold">
+                Estado: Conectado a los servidores de Firebase (WebSockets OK).
+            </span>
+        </div>
+
+        <!-- Ventana de Chat en Tiempo Real -->
+        <div id="chatMessages" class="flex-1 bg-slate-800/40 border border-slate-700/60 rounded-2xl p-4 overflow-y-auto max-h-[52vh] min-h-[320px] flex flex-col gap-3 shadow-inner">
+            <div class="text-center text-xs text-slate-500 my-auto font-medium">Cargando mensajes del grupo...</div>
+        </div>
+
+        <!-- Formulario de Envío de Mensajes -->
+        <form id="chatForm" onsubmit="enviarMensaje(event)" class="flex gap-2 items-center bg-slate-800 p-2 rounded-2xl border border-slate-700 shadow-xl">
+            <input type="text" id="usernameInput" placeholder="Tu Nombre" class="w-1/3 min-w-[100px] bg-slate-900 border border-slate-700 text-slate-100 text-sm font-semibold rounded-xl px-3 py-2.5 focus:outline-none focus:border-teal-500">
+            <input type="text" id="messageInput" placeholder="Escribe un mensaje..." required class="flex-1 bg-slate-900 border border-slate-700 text-slate-100 text-sm rounded-xl px-4 py-2.5 focus:outline-none focus:border-teal-500">
+            <button type="submit" class="bg-teal-500 hover:bg-teal-400 active:bg-teal-600 text-slate-950 font-bold px-4 py-2.5 rounded-xl transition duration-150 flex items-center justify-center shadow-md">
+                <i class="fa-solid fa-paper-plane text-base"></i>
+            </button>
+        </form>
+
+    </main>
+
+    <!-- Código JavaScript / Conexión a Firebase -->
+    <script>
+        // 1. Configuración de Firebase Realtime Database
+        const firebaseConfig = {
+            databaseURL: "https://chatfamilia-386df-default-rtdb.firebaseio.com"
+        };
+
+        // Inicializar Firebase
+        if (!firebase.apps.length) {
+            firebase.initializeApp(firebaseConfig);
+        }
+        const database = firebase.database();
+
+        // Variables de Estado Local
+        let canalActual = "general";
+        let miNombre = localStorage.getItem("chat_username") || "Andy ml";
+        
+        // Referencias a Elementos HTML
+        const inputNombre = document.getElementById("usernameInput");
+        const chatContainer = document.getElementById("chatMessages");
+        const statusText = document.getElementById("connectionStatus");
+        const userPresenceSub = document.getElementById("userPresenceSub");
+        const statusStar = document.getElementById("statusStar");
+        const bannerCena = document.getElementById("bannerCena");
+
+        // Inicializar Campo de Nombre
+        inputNombre.value = miNombre;
+        inputNombre.addEventListener("change", (e) => {
+            const nuevoNombre = e.target.value.trim();
+            if (nuevoNombre) {
+                // Eliminar nodo previo si cambia de nombre
+                database.ref("presencia/" + miNombre).remove();
+                miNombre = nuevoNombre;
+                localStorage.setItem("chat_username", miNombre);
+                actualizarPresencia();
+            }
+        });
+
+        // 2. Control de Estado de Conexión WebSockets y Presencia
+        const connectedRef = database.ref(".info/connected");
+        let miPresenciaRef = null;
+
+        connectedRef.on("value", (snap) => {
+            if (snap.val() === true) {
+                statusText.innerText = "Estado: Conectado a los servidores de Firebase (WebSockets OK).";
+                statusText.className = "text-emerald-400 font-semibold";
+                statusStar.className = "text-emerald-400 text-3xl transition-all duration-300 drop-shadow-md";
+
+                // Registrar Presencia y configurar desconexión automática
+                miPresenciaRef = database.ref("presencia/" + miNombre);
+                miPresenciaRef.onDisconnect().remove();
+                actualizarPresencia();
+            } else {
+                statusText.innerText = "Estado: Desconectado. Intentando reconectar...";
+                statusText.className = "text-amber-400 font-semibold";
+                statusStar.className = "text-amber-500 text-3xl opacity-50";
+            }
+        });
+
+        function actualizarPresencia() {
+            if (miPresenciaRef) {
+                miPresenciaRef.set({
+                    online: true,
+                    ultimoAcceso: Date.now()
+                });
+            }
+        }
+
+        // Monitor en Tiempo Real de la Presencia Familiar
+        database.ref("presencia").on("value", (snapshot) => {
+            const data = snapshot.val();
+            if (data) {
+                const nombres = Object.keys(data);
+                if (nombres.length === 1 && nombres[0] === miNombre) {
+                    userPresenceSub.innerText = "Esperando a otros familiares...";
+                } else {
+                    userPresenceSub.innerText = `En línea (${nombres.length}): ${nombres.join(", ")}`;
+                }
+            } else {
+                userPresenceSub.innerText = "Esperando a otros familiares...";
+            }
+        });
+
+        // 3. Sistema de Mensajes por Canal (`chats_privados/{canal}`)
+        let listenerCanal = null;
+
+        function escucharCanal(canal) {
+            if (listenerCanal) {
+                listenerCanal.off();
+            }
+
+            chatContainer.innerHTML = '<div class="text-center text-xs text-slate-500 my-auto">Cargando mensajes...</div>';
+            listenerCanal = database.ref(`chats_privados/${canal}`);
+
+            listenerCanal.limitToLast(60).on("value", (snapshot) => {
+                chatContainer.innerHTML = "";
+                const mensajes = snapshot.val();
+
+                if (!mensajes) {
+                    chatContainer.innerHTML = '<div class="text-center text-xs text-slate-500 my-auto">No hay mensajes aún. ¡Escribe el primero!</div>';
+                    return;
+                }
+
+                Object.values(mensajes).forEach((msg) => {
+                    const esMio = msg.usuario === miNombre;
+                    const msgDiv = document.createElement("div");
+                    msgDiv.className = `flex flex-col ${esMio ? "items-end" : "items-start"}`;
+
+                    const fecha = new Date(msg.timestamp || Date.now());
+                    const hora = fecha.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+                    msgDiv.innerHTML = `
+                        <div class="max-w-[85%] rounded-2xl px-4 py-2.5 ${esMio ? "bg-teal-600 text-white rounded-br-none" : "bg-slate-700/90 text-slate-100 rounded-bl-none"} shadow-sm">
+                            ${!esMio ? `<div class="text-[11px] font-bold text-teal-400 mb-0.5">${escapeHTML(msg.usuario || 'Familiar')}</div>` : ''}
+                            <div class="text-sm leading-relaxed">${escapeHTML(msg.texto || '')}</div>
+                            <div class="text-[9px] text-right mt-1 opacity-70">${hora}</div>
+                        </div>
+                    `;
+                    chatContainer.appendChild(msgDiv);
+                });
+
+                // Desplazar automáticamente hasta el final
+                chatContainer.scrollTop = chatContainer.scrollHeight;
+            });
+        }
+
+        function cambiarCanal(nuevoCanal) {
+            canalActual = nuevoCanal;
+            escucharCanal(canalActual);
+        }
+
+        function enviarMensaje(e) {
+            e.preventDefault();
+            const inputMsg = document.getElementById("messageInput");
+            const texto = inputMsg.value.trim();
+
+            if (!texto) return;
+
+            database.ref(`chats_privados/${canalActual}`).push({
+                usuario: miNombre,
+                texto: texto,
+                timestamp: Date.now()
+            });
+
+            inputMsg.value = "";
+        }
+
+        // Función auxiliar para escapar texto HTML de los mensajes
+        function escapeHTML(str) {
+            return str.replace(/[&<>'"]/g, 
+                tag => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[tag] || tag)
+            );
+        }
+
+        // 4. Módulo "Aviso de Cena" (`sistema/aviso_cena`)
+        function avisarCena() {
+            database.ref('sistema/aviso_cena').set({
+                activo: true,
+                timestamp: Date.now(),
+                enviadoPor: miNombre
+            });
+
+            // Restablece la alerta automáticamente tras 20 segundos
+            setTimeout(() => {
+                database.ref('sistema/aviso_cena').set({ activo: false });
+            }, 20000);
+        }
+
+        // Escuchador global en tiempo real para el aviso de cena
+        database.ref('sistema/aviso_cena').on('value', (snapshot) => {
+            const data = snapshot.val();
+            
+            if (data && data.activo) {
+                bannerCena.classList.remove('hidden');
+
+                // Hacer vibrar el móvil si el sistema lo soporta
+                if (navigator.vibrate) {
+                    navigator.vibrate([300, 150, 300, 150, 300]);
+                }
+            } else {
+                bannerCena.classList.add('hidden');
+            }
+        });
+
+        // Inicializar la aplicación al cargar la ventana
+        window.onload = () => {
+            escucharCanal(canalActual);
+        };
+    </script>
+</body>
+</html>

@@ -129,8 +129,20 @@
 
         const sonidoNotificacion = new Audio('WhatsApp Audio 2026-11-04 at 12.23.54 AM.mpeg');
 
+        let miNombre = localStorage.getItem("chat_username");
+
+        // Si no hay nombre guardado o tiene el genérico antiguo, pedirlo obligatoriamente con una ventana
+        if (!miNombre || miNombre === "Andy ml") {
+            let nombreIngresado = prompt("¡Bienvenido a Familia Machuka! Ingresa tu nombre para identificarte en el chat:");
+            if (nombreIngresado && nombreIngresado.trim() !== "") {
+                miNombre = nombreIngresado.trim();
+            } else {
+                miNombre = "Familiar_" + Math.floor(Math.random() * 900 + 100);
+            }
+            localStorage.setItem("chat_username", miNombre);
+        }
+
         let destinoActual = "general";
-        let miNombre = localStorage.getItem("chat_username") || "Andy ml";
         let totalMensajesPrevios = 0; 
         let esPrimeraCargaHistorial = true;
         let listaFamiliaresConectados = [];
@@ -147,7 +159,6 @@
 
         inputNombre.value = miNombre;
 
-        // Limpiar caracteres extraños en nombres para evitar errores en las rutas de Firebase
         function limpiarNombre(nombre) {
             return nombre.trim().replace(/[.#$\/\[\]]/g, "_");
         }
@@ -185,12 +196,10 @@
             miPresenciaRef.onDisconnect().remove();
         }
 
-        // Monitorear presencia general de forma robusta
         database.ref("presencia").on("value", (snapshot) => {
             const data = snapshot.val();
             if (data) {
                 listaFamiliaresConectados = [];
-                Object.values(datachl => {}).forEach // placeholder seguro
                 Object.keys(data).forEach(key => {
                     const info = data[key];
                     if (info && info.nombre) {

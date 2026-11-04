@@ -13,7 +13,7 @@
         header h2 { margin: 0; font-size: 16px; color: #e9edef; }
         .status-header { font-size: 11px; color: #00a884; margin-top: 3px; font-weight: normal; }
         
-        /* BARRA DE SELECCIÓN DE CHAT */
+        /* BARRA DE SELECCIÓN DE CHAT DINÁMICA */
         .chat-selector { background-color: #111b21; padding: 8px 15px; border-bottom: 1px solid #2f3b43; display: flex; align-items: center; gap: 10px; }
         .chat-selector label { font-size: 12px; color: #8696a0; font-weight: bold; }
         .chat-selector select { background-color: #2a3942; color: #e9edef; border: 1px solid #00a884; border-radius: 12px; padding: 5px 10px; font-size: 13px; outline: none; flex: 1; }
@@ -37,13 +37,12 @@
         <div id="status-display" class="status-header">Conectando...</div>
     </header>
 
-    <!-- MENU DESPLEGABLE DE CHATS -->
+    <!-- MENU DESPLEGABLE DINÁMICO -->
     <div class="chat-selector">
         <label for="select-chat">Canal:</label>
-        <select id="select-chat" onchange="cambiarCanal()">
+        <select id="select-chat" onchange="manejarCambioCanal()">
             <option value="general">🌐 Grupo General</option>
-            <option value="privado_mama">🔒 Privado con Mamá</option>
-            <option value="privado_hermano">🔒 Privado con Hermano</option>
+            <option value="nuevo_privado" style="color: #53bdeb;">➕ Abrir chat privado...</option>
         </select>
     </div>
 
@@ -72,6 +71,26 @@
             localStorage.setItem('chat_username', userName);
         }
         document.getElementById('display-name').innerText = userName;
+
+        // Cargar chats privados guardados en el navegador del usuario
+        let customPrivateChats = JSON.parse(localStorage.getItem('custom_private_chats') || '[]');
+        const selectElement = document.getElementById('select-chat');
+
+        function actualizarListaCanales() {
+            // Mantener las opciones base
+            selectElement.innerHTML = `
+                <option value="general">🌐 Grupo General</option>
+                <option value="nuevo_privado" style="color: #53bdeb;">➕ Abrir chat privado...</option>
+            `;
+            // Insertar los chats privados personalizados
+            customPrivateChats.forEach(chatKey => {
+                const opt = document.createElement('option');
+                opt.value = chatKey;
+                opt.innerText = `🔒 Privado: ${chatKey.replace('privado_', '')}`;
+                selectElement.insertBefore(opt, selectElement.lastElementChild);
+            });
+            selectElement.value = activeChannel;
+        }
 
         // --- SISTEMA DE PRESENCIA ---
         const userStatusRef = database.ref('/presencia/' + userName);
@@ -112,15 +131,33 @@
         });
 
         // --- GESTIÓN DE CANALES Y MENSAJES ---
-        function cambiarCanal() {
-            activeChannel = document.getElementById('select-chat').value;
-            document.getElementById('chat-container').innerHTML = ''; // Limpiar pantalla
+        function manejarCambioCanal() {
+            const val = selectElement.value;
             
-            if (currentRef) {
-                currentRef.off(); // Detener escucha del canal anterior
+            if (val === 'nuevo_privado') {
+                const otroFamiliar = prompt("¿Con quién deseas abrir un chat privado? (Ingresa su nombre):");
+                if (otroFamiliar && otroFamiliar.trim() !== "") {
+                    // Ordenar nombres alfabéticamente para que ambos usen exactamente la misma ruta de chat
+                    const nombres = [userName.toLowerCase(), otroFamiliar.trim().toLowerCase()].sort();
+                    const chatKey = `privado_${nombres[0]}_${nombres[1]}`;
+                    
+                    if (!customPrivateChats.includes(chatKey)) {
+                        customPrivateChats.push(chatKey);
+                        localStorage.setItem('custom_private_chats', JSON.stringify(customPrivateChats));
+                    }
+                    activeChannel = chatKey;
+                    actualizarListaCanales();
+                } else {
+                    selectElement.value = activeChannel; // Regresar si canceló
+                    return;
+                }
+            } else {
+                activeChannel = val;
             }
 
-            // Definir ruta en Firebase según el canal seleccionado
+            document.getElementById('chat-container').innerHTML = '';
+            if (currentRef) currentRef.off();
+
             if (activeChannel === 'general') {
                 currentRef = database.ref('mensajes');
             } else {
@@ -200,8 +237,9 @@
             if (e.key === 'Enter') sendMessage();
         };
 
-        // Iniciar en el canal General por defecto
-        cambiarCanal();
+        // Inicializar canales y arrancar en General
+        actualizarListaCanales();
+        manejarCambioCanal();
     </script>
 </body>
 </html>

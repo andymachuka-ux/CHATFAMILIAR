@@ -58,7 +58,7 @@
             animation: alert-pulse 1s infinite ease-in-out;
         }
 
-        /* Animación de 3 destellos rojos seguidos */
+        /* Animación de 3 destellos rojos seguidos para accesibilidad visual */
         @keyframes flash-triple-red {
             0%, 100% { background-color: #0f172a; }
             15%, 45%, 75% { background-color: #dc2626; }
@@ -95,16 +95,15 @@
     <!-- Contenido Principal -->
     <main class="max-w-2xl w-full mx-auto flex-1 flex flex-col p-3 md:p-4 gap-3">
 
-        <!-- Selector de Canal -->
+        <!-- Selector de Conversación (Grupo General o Privados con Familiares) -->
         <div class="bg-slate-800 p-3 rounded-2xl border border-slate-700/70 shadow-sm flex flex-col sm:flex-row gap-2.5 items-stretch sm:items-center justify-between">
-            <label for="channelSelect" class="text-xs font-bold uppercase tracking-wider text-slate-400 flex items-center gap-2 pl-1">
-                <i class="fa-solid fa-globe text-teal-400 text-sm"></i> Canal:
+            <label for="chatSelect" class="text-xs font-bold uppercase tracking-wider text-slate-400 flex items-center gap-2 pl-1">
+                <i class="fa-solid fa-comments text-teal-400 text-sm"></i> Chat:
             </label>
             <div class="relative flex-1">
-                <select id="channelSelect" onchange="cambiarCanal(this.value)" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-2.5 text-sm font-semibold text-slate-100 focus:outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500 appearance-none cursor-pointer">
-                    <option value="general">🌐 Grupo General</option>
-                    <option value="compras">🛒 Lista de Compras</option>
-                    <option value="urgente">⚡ Avisos Rápidos</option>
+                <select id="chatSelect" onchange="cambiarDestinoChat(this.value)" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-2.5 text-sm font-semibold text-slate-100 focus:outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500 appearance-none cursor-pointer">
+                    <option value="general">🌐 Grupo General (Todos ven)</option>
+                    <!-- Los usuarios conectados se cargarán dinámicamente aquí para chat privado -->
                 </select>
                 <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3.5 text-slate-400">
                     <i class="fa-solid fa-chevron-down text-xs"></i>
@@ -125,15 +124,18 @@
         </div>
 
         <!-- Barra de Estado / Diagnóstico -->
-        <div class="bg-slate-800/90 border border-slate-700/60 rounded-xl px-3.5 py-2 text-xs font-mono">
+        <div class="bg-slate-800/90 border border-slate-700/60 rounded-xl px-3.5 py-2 text-xs font-mono flex justify-between items-center">
             <span id="connectionStatus" class="text-emerald-400 font-semibold">
-                Estado: Conectado a los servidores de Firebase (WebSockets OK).
+                Estado: Conectado (WebSockets OK).
+            </span>
+            <span id="chatIndicatorBadge" class="text-xs bg-teal-500/20 text-teal-300 px-2 py-0.5 rounded-md font-sans">
+                Modo: Grupo General
             </span>
         </div>
 
         <!-- Ventana de Chat en Tiempo Real -->
         <div id="chatMessages" class="flex-1 bg-slate-800/40 border border-slate-700/60 rounded-2xl p-4 overflow-y-auto max-h-[52vh] min-h-[320px] flex flex-col gap-3 shadow-inner">
-            <div class="text-center text-xs text-slate-500 my-auto font-medium">Cargando mensajes del grupo...</div>
+            <div class="text-center text-xs text-slate-500 my-auto font-medium">Cargando mensajes...</div>
         </div>
 
         <!-- Formulario de Envío de Mensajes -->
@@ -147,7 +149,7 @@
 
     </main>
 
-    <!-- JavaScript con Firebase y Destello Rojo Triple -->
+    <!-- JavaScript con Soporte de Grupo General y Chats Privados -->
     <script>
         const firebaseConfig = {
             databaseURL: "https://chatfamilia-386df-default-rtdb.firebaseio.com"
@@ -160,10 +162,11 @@
 
         const sonidoNotificacion = new Audio('WhatsApp Audio 2026-11-04 at 12.23.54 AM.mpeg');
 
-        let canalActual = "general";
+        let destinoActual = "general"; // Puede ser "general" o el nombre de otro usuario para chat privado
         let miNombre = localStorage.getItem("chat_username") || "Andy ml";
         let totalMensajesPrevios = 0; 
         let esPrimeraCargaHistorial = true;
+        let listaFamiliaresConectados = [];
         
         const bodyApp = document.getElementById("bodyApp");
         const inputNombre = document.getElementById("usernameInput");
@@ -172,15 +175,19 @@
         const userPresenceSub = document.getElementById("userPresenceSub");
         const statusStar = document.getElementById("statusStar");
         const bannerCena = document.getElementById("bannerCena");
+        const chatSelect = document.getElementById("chatSelect");
+        const chatIndicatorBadge = document.getElementById("chatIndicatorBadge");
 
         inputNombre.value = miNombre;
         inputNombre.addEventListener("change", (e) => {
             const nuevoNombre = e.target.value.trim();
-            if (nuevoNombre) {
+            if (nuevoNombre && nuevoNombre !== miNombre) {
                 database.ref("presencia/" + miNombre).remove();
                 miNombre = nuevoNombre;
                 localStorage.setItem("chat_username", miNombre);
                 actualizarPresencia();
+                actualizarSelectorPrivados(listaFamiliaresConectados);
+                escucharConversacion(destinoActual);
             }
         });
 
@@ -189,7 +196,7 @@
 
         connectedRef.on("value", (snap) => {
             if (snap.val() === true) {
-                statusText.innerText = "Estado: Conectado a los servidores de Firebase (WebSockets OK).";
+                statusText.innerText = "Estado: Conectado (WebSockets OK).";
                 statusText.className = "text-emerald-400 font-semibold";
                 statusStar.className = "text-emerald-400 text-3xl transition-all duration-300 drop-shadow-md";
 
@@ -197,7 +204,7 @@
                 miPresenciaRef.onDisconnect().remove();
                 actualizarPresencia();
             } else {
-                statusText.innerText = "Estado: Desconectado. Intentando reconectar...";
+                statusText.innerText = "Estado: Desconectado. Reconectando...";
                 statusText.className = "text-amber-400 font-semibold";
                 statusStar.className = "text-amber-500 text-3xl opacity-50";
             }
@@ -212,47 +219,97 @@
             }
         }
 
+        // Monitorear presencia y actualizar la lista de chats privados disponibles
         database.ref("presencia").on("value", (snapshot) => {
             const data = snapshot.val();
             if (data) {
-                const nombres = Object.keys(data);
-                if (nombres.length === 1 && nombres[0] === miNombre) {
+                listaFamiliaresConectados = Object.keys(data);
+                
+                // Texto de subtítulo en el encabezado
+                const otros = listaFamiliaresConectados.filter(n => n !== miNombre);
+                if (otros.length === 0) {
                     userPresenceSub.innerText = "Esperando a otros familiares...";
                 } else {
-                    userPresenceSub.innerText = `En línea (${nombres.length}): ${nombres.join(", ")}`;
+                    userPresenceSub.innerText = `En línea (${listaFamiliaresConectados.length}): ${listaFamiliaresConectados.join(", ")}`;
                 }
+
+                actualizarSelectorPrivados(listaFamiliaresConectados);
             } else {
+                listaFamiliaresConectados = [];
                 userPresenceSub.innerText = "Esperando a otros familiares...";
+                actualizarSelectorPrivados([]);
             }
         });
 
-        let listenerCanal = null;
+        function actualizarSelectorPrivados(nombres) {
+            // Mantener la opción seleccionada actual
+            const valorPrevio = chatSelect.value;
+            
+            let opcionesHTML = `<option value="general">🌐 Grupo General (Todos ven)</option>`;
+            
+            nombres.forEach(nombre => {
+                if (nombre !== miNombre) {
+                    opcionesHTML += `<option value="privado_${obtenerIdPrivado(miNombre, nombre)}">🔒 Privado con: ${nombre}</option>`;
+                }
+            });
+
+            chatSelect.innerHTML = opcionesHTML;
+            
+            // Intentar restaurar la selección si aún existe
+            if ([...chatSelect.options].some(opt => opt.value === valorPrevio)) {
+                chatSelect.value = valorPrevio;
+            } else {
+                chatSelect.value = "general";
+                destinoActual = "general";
+            }
+        }
+
+        // Generar un ID único y ordenado alfabéticamente para que ambos usuarios compartan la misma ruta privada
+        function obtenerIdPrivado(userA, userB) {
+            const ordenados = [userA, userB].sort();
+            return ordenados.join("_to_");
+        }
+
+        let listenerChat = null;
 
         function dispararFlashRojo() {
             bodyApp.classList.remove('flash-rojo-activo');
-            void bodyApp.offsetWidth; // Forzar reinicio de animación
+            void bodyApp.offsetWidth; 
             bodyApp.classList.add('flash-rojo-activo');
             setTimeout(() => {
                 bodyApp.classList.remove('flash-rojo-activo');
             }, 1200);
         }
 
-        function escucharCanal(canal) {
-            if (listenerCanal) {
-                listenerCanal.off();
+        function escucharConversacion(destino) {
+            if (listenerChat) {
+                listenerChat.off();
             }
 
             chatContainer.innerHTML = '<div class="text-center text-xs text-slate-500 my-auto">Cargando mensajes...</div>';
-            listenerCanal = database.ref(`chats_privados/${canal}`);
             
+            let rutaFirebase = "";
+            if (destino === "general") {
+                rutaFirebase = "chats_grupo/general";
+                chatIndicatorBadge.innerText = "Modo: Grupo General";
+                chatIndicatorBadge.className = "text-xs bg-teal-500/20 text-teal-300 px-2 py-0.5 rounded-md font-sans";
+            } else {
+                // Es un chat privado tipo "privado_Ana_to_Andy"
+                const idChatPrivado = destino.replace("privado_", "");
+                rutaFirebase = `chats_privados/${idChatPrivado}`;
+                chatIndicatorBadge.innerText = "Modo: Chat Privado 🔒";
+                chatIndicatorBadge.className = "text-xs bg-amber-500/20 text-amber-300 px-2 py-0.5 rounded-md font-sans";
+            }
+
+            listenerChat = database.ref(rutaFirebase);
             esPrimeraCargaHistorial = true;
 
-            listenerCanal.limitToLast(60).on("value", (snapshot) => {
+            listenerChat.limitToLast(60).on("value", (snapshot) => {
                 chatContainer.innerHTML = "";
                 const mensajes = snapshot.val();
 
                 if (!mensajes) {
-                    chatContainer.innerHTML = '<div class="text-center text-xs text-slate-500 my-auto">No hay mensajes aún. ¡Escribe el primero!</div>';
+                    chatContainer.innerHTML = '<div class="text-center text-xs text-slate-500 my-auto">No hay mensajes aún en este chat. ¡Escribe el primero!</div>';
                     totalMensajesPrevios = 0;
                     esPrimeraCargaHistorial = false;
                     return;
@@ -261,7 +318,7 @@
                 const listaMensajes = Object.values(mensajes);
                 const cantidadActual = listaMensajes.length;
 
-                // Si hay mensaje nuevo de OTRO usuario: sonar y dar el triple destello rojo
+                // Validar si hay mensaje nuevo de OTRO usuario: sonar y dar el triple destello rojo
                 if (!esPrimeraCargaHistorial && cantidadActual > totalMensajesPrevios) {
                     const ultimoMensaje = listaMensajes[listaMensajes.length - 1];
                     
@@ -298,9 +355,9 @@
             });
         }
 
-        function cambiarCanal(nuevoCanal) {
-            canalActual = nuevoCanal;
-            escucharCanal(canalActual);
+        function cambiarDestinoChat(nuevoDestino) {
+            destinoActual = nuevoDestino;
+            escucharConversacion(destinoActual);
         }
 
         function enviarMensaje(e) {
@@ -310,7 +367,15 @@
 
             if (!texto) return;
 
-            database.ref(`chats_privados/${canalActual}`).push({
+            let rutaFirebase = "";
+            if (destinoActual === "general") {
+                rutaFirebase = "chats_grupo/general";
+            } else {
+                const idChatPrivado = destinoActual.replace("privado_", "");
+                rutaFirebase = `chats_privados/${idChatPrivado}`;
+            }
+
+            database.ref(rutaFirebase).push({
                 usuario: miNombre,
                 texto: texto,
                 timestamp: Date.now()
@@ -346,7 +411,7 @@
 
                 if (!estadoCenaAnterior) {
                     if (data.enviadoPor !== miNombre) {
-                        sonidoNotificacion.currentTime = 0;
+                        sonidoNotificacion.currentTime, sonidoNotificacion.currentTime = 0;
                         sonidoNotificacion.play().catch(err => console.log("Audio de cena bloqueado"));
 
                         dispararFlashRojo();
@@ -360,7 +425,7 @@
         });
 
         window.onload = () => {
-            escucharCanal(canalActual);
+            escucharConversacion(destinoActual);
         };
     </script>
 </body>

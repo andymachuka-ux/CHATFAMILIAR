@@ -127,11 +127,53 @@
         }
         const database = firebase.database();
 
-        const sonidoNotificacion = new Audio('WhatsApp Audio 2026-11-04 at 12.23.54 AM.mpeg');
+        // Sintetizador de Audio Web nativo (Garantiza sonido sin depender de archivos externos rotos o bloqueados)
+        let audioCtx = null;
+
+        function reproducirAlertaSonora() {
+            try {
+                if (!audioCtx) {
+                    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                }
+                if (audioCtx.state === 'suspended') {
+                    audioCtx.resume();
+                }
+
+                // Generar un tono doble tipo timbre claro y fuerte
+                const now = audioCtx.currentTime;
+                
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(587.33, now); // Nota D5
+                osc.frequency.setValueAtTime(880, now + 0.15); // Nota A5
+
+                gain.gain.setValueAtTime(0.3, now);
+                gain.gain.exponentialRampToValueAtTime(0.01, now + 0.4);
+
+                osc.connect(gain);
+                gain.connect(audioCtx.destination);
+
+                osc.start(now);
+                osc.stop(now + 0.4);
+            } catch (e) {
+                console.log("Audio no soportado o bloqueado por el navegador", e);
+            }
+        }
+
+        // Desbloquear audio automáticamente al primer toque en la pantalla
+        document.addEventListener('click', () => {
+            if (!audioCtx) {
+                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            }
+            if (audioCtx.state === 'suspended') {
+                audioCtx.resume();
+            }
+        }, { once: true });
 
         let miNombre = localStorage.getItem("chat_username");
 
-        // Si no hay nombre guardado o tiene el genérico antiguo, pedirlo obligatoriamente con una ventana
         if (!miNombre || miNombre === "Andy ml") {
             let nombreIngresado = prompt("¡Bienvenido a Familia Machuka! Ingresa tu nombre para identificarte en el chat:");
             if (nombreIngresado && nombreIngresado.trim() !== "") {
@@ -286,8 +328,7 @@
                 if (!esPrimeraCargaHistorial && cantidadActual > totalMensajesPrevios) {
                     const ultimoMensaje = listaMensajes[listaMensajes.length - 1];
                     if (ultimoMensaje && ultimoMensaje.usuario !== miNombre) {
-                        sonidoNotificacion.currentTime = 0;
-                        sonidoNotificacion.play().catch(err => console.log("Audio en espera"));
+                        reproducirAlertaSonora();
                         dispararFlashRojo();
                     }
                 }
@@ -354,8 +395,7 @@
             if (data && data.activo) {
                 bannerCena.classList.remove('hidden');
                 if (!estadoCenaAnterior && data.enviadoPor !== miNombre) {
-                    sonidoNotificacion.currentTime = 0;
-                    sonidoNotificacion.play().catch(err => console.log("Audio cena bloqueado"));
+                    reproducirAlertaSonora();
                     dispararFlashRojo();
                 }
                 estadoCenaAnterior = true;

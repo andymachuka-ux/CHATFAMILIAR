@@ -56,7 +56,7 @@
                 </div>
                 <div>
                     <h1 class="font-extrabold text-2xl leading-none text-white tracking-tight">familia Machuka</h1>
-                    <p id="userPresenceSub" class="text-xs text-teal-400 font-semibold mt-1">Conectando y obteniendo GPS...</p>
+                    <p id="userPresenceSub" class="text-xs text-teal-400 font-semibold mt-1">Conectando al grupo familiar...</p>
                 </div>
             </div>
             <div class="flex items-center gap-2">
@@ -129,15 +129,15 @@
         }
         const database = firebase.database();
 
-        // Sistema de Audio Dual: Intenta reproducir tu archivo 'tonoalerta.mpeg' y si falla, usa el sintetizador web de respaldo
+        // Audio Dual: Archivo 'tonoalerta.mpeg' con respaldo de sintetizador web
         const audioFile = new Audio('tonoalerta.mpeg');
+        audioFile.preload = 'auto';
         let audioCtx = null;
 
         function reproducirAlertaSonora() {
-            // Intentar reproducir tu archivo mpeg
             audioFile.currentTime = 0;
             audioFile.play().catch(err => {
-                console.log("Archivo mpeg bloqueado o no compatible, usando sintetizador de respaldo...", err);
+                console.log("Reproducción de archivo bloqueada, activando sintetizador...", err);
                 dispararSintetizadorRespaldo();
             });
         }
@@ -153,46 +153,42 @@
 
                 const now = audioCtx.currentTime;
                 
-                // Primer golpe de timbre
+                // Primer golpe
                 const osc1 = audioCtx.createOscillator();
                 const gain1 = audioCtx.createGain();
                 osc1.type = 'sine';
                 osc1.frequency.setValueAtTime(659.25, now);
-                gain1.gain.setValueAtTime(0.5, now);
-                gain1.gain.exponentialRampToValueAtTime(0.01, now + 0.2);
+                gain1.gain.setValueAtTime(0.6, now);
+                gain1.gain.exponentialRampToValueAtTime(0.01, now + 0.25);
                 osc1.connect(gain1);
                 gain1.connect(audioCtx.destination);
                 osc1.start(now);
-                osc1.stop(now + 0.2);
+                osc1.stop(now + 0.25);
 
-                // Segundo golpe de timbre
+                // Segundo golpe
                 const osc2 = audioCtx.createOscillator();
                 const gain2 = audioCtx.createGain();
                 osc2.type = 'sine';
-                osc2.frequency.setValueAtTime(880, now + 0.2);
-                gain2.gain.setValueAtTime(0.5, now + 0.2);
-                gain2.gain.exponentialRampToValueAtTime(0.01, now + 0.5);
+                osc2.frequency.setValueAtTime(880, now + 0.25);
+                gain2.gain.setValueAtTime(0.6, now + 0.25);
+                gain2.gain.exponentialRampToValueAtTime(0.01, now + 0.6);
                 osc2.connect(gain2);
                 gain2.connect(audioCtx.destination);
-                osc2.start(now + 0.2);
-                osc2.stop(now + 0.5);
+                osc2.start(now + 0.25);
+                osc2.stop(now + 0.6);
             } catch (e) {
-                console.log("Error en sintetizador de respaldo:", e);
+                console.log("Error en sintetizador:", e);
             }
         }
 
         // Registrar Service Worker
         if ('serviceWorker' in navigator) {
             navigator.serviceWorker.register('firebase-messaging-sw.js')
-                .then((reg) => {
-                    console.log('Service Worker registrado con éxito:', reg.scope);
-                })
-                .catch((err) => {
-                    console.log('Error al registrar Service Worker:', err);
-                });
+                .then((reg) => console.log('SW registrado:', reg.scope))
+                .catch((err) => console.log('Error SW:', err));
         }
 
-        // Desbloquear audio y permisos al primer toque en la pantalla
+        // Desbloqueo de audio y permisos al primer toque
         document.addEventListener('click', () => {
             if (!audioCtx) {
                 audioCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -249,21 +245,51 @@
             return nombre.trim().replace(/[.#$\/\[\]]/g, "_");
         }
 
-        // Geolocalización GPS automática
-        function iniciarGeolocalizacion() {
+        // Registro de presencia inmediato independiente del GPS
+        const connectedRef = database.ref(".info/connected");
+        let miPresenciaRef = null;
+
+        connectedRef.on("value", (snap) => {
+            if (snap.val() === true) {
+                statusText.innerText = "Estado: Conectado.";
+                statusText.className = "text-emerald-400 font-semibold";
+                statusStar.className = "text-emerald-400 text-3xl transition-all duration-300 drop-shadow-md";
+                
+                registrarPresenciaInmediata();
+                iniciarGeolocalizacionOpcional();
+            } else {
+                statusText.innerText = "Estado: Desconectado.";
+                statusText.className = "text-amber-400 font-semibold";
+                statusStar.className = "text-amber-500 text-3xl opacity-50";
+            }
+        });
+
+        function registrarPresenciaInmediata() {
+            const nombreKey = limpiarNombre(miNombre);
+            miPresenciaRef = database.ref("presencia/" + nombreKey);
+            miPresenciaRef.update({ 
+                nombre: miNombre, 
+                online: true, 
+                ultimoAcceso: Date.now() 
+            });
+            miPresenciaRef.onDisconnect().remove();
+        }
+
+        // GPS secundario opcional
+        function iniciarGeolocalizacionOpcional() {
             if ("geolocation" in navigator) {
-                navigator.geolocation.watchPosition(
+                navigator.geolocation.getCurrentPosition(
                     (position) => {
                         miUbicacionActual = {
                             lat: position.coords.latitude,
                             lng: position.coords.longitude
                         };
-                        registrarPresenciaYEscuchar();
+                        if (miPresenciaRef) {
+                            miPresenciaRef.update({ latitud: miUbicacionActual.lat, longitud: miUbicacionActual.lng });
+                        }
                     },
-                    (error) => {
-                        console.log("GPS no disponible:", error.message);
-                    },
-                    { enableHighAccuracy: true, maximumAge: 10000, timeout: 5000 }
+                    (error) => { console.log("GPS omitido o denegado:", error.message); },
+                    { enableHighAccuracy: false, timeout: 8000 }
                 );
             }
         }
@@ -274,39 +300,11 @@
                 database.ref("presencia/" + limpiarNombre(miNombre)).remove();
                 miNombre = limpio;
                 localStorage.setItem("chat_username", miNombre);
-                registrarPresenciaYEscuchar();
+                registrarPresenciaInmediata();
             }
         });
 
-        const connectedRef = database.ref(".info/connected");
-        let miPresenciaRef = null;
-
-        connectedRef.on("value", (snap) => {
-            if (snap.val() === true) {
-                statusText.innerText = "Estado: Conectado (GPS Activo).";
-                statusText.className = "text-emerald-400 font-semibold";
-                statusStar.className = "text-emerald-400 text-3xl transition-all duration-300 drop-shadow-md";
-                iniciarGeolocalizacion();
-            } else {
-                statusText.innerText = "Estado: Desconectado.";
-                statusText.className = "text-amber-400 font-semibold";
-                statusStar.className = "text-amber-500 text-3xl opacity-50";
-            }
-        });
-
-        function registrarPresenciaYEscuchar() {
-            const nombreKey = limpiarNombre(miNombre);
-            miPresenciaRef = database.ref("presencia/" + nombreKey);
-            miPresenciaRef.set({ 
-                nombre: miNombre, 
-                online: true, 
-                latitud: miUbicacionActual.lat, 
-                longitud: miUbicacionActual.lng,
-                ultimoAcceso: Date.now() 
-            });
-            miPresenciaRef.onDisconnect().remove();
-        }
-
+        // Escucha de lista de familiares conectados en tiempo real
         database.ref("presencia").on("value", (snapshot) => {
             const data = snapshot.val();
             if (data) {
@@ -318,8 +316,7 @@
                     }
                 });
 
-                const outros = listaFamiliaresConectados.filter(n => limpiarNombre(n) !== limpiarNombre(miNombre));
-                if (outros.length === 0) {
+                if (listaFamiliaresConectados.length === 0) {
                     userPresenceSub.innerText = "Esperando a otros familiares...";
                 } else {
                     userPresenceSub.innerText = `En línea (${listaFamiliaresConectados.length}): ${listaFamiliaresConectados.join(", ")}`;

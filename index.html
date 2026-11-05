@@ -17,6 +17,7 @@
     <!-- Firebase SDK (Version Compatibilidad 9.23.0) -->
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-messaging-compat.js"></script>
 
     <style>
         body {
@@ -35,7 +36,7 @@
         }
         .alert-dinner-active { animation: alert-pulse 1s infinite ease-in-out; }
 
-        /* Animación ajustada a 6 destellos rojos seguidos para accesibilidad visual */
+        /* Animación de 6 destellos rojos seguidos para accesibilidad visual */
         @keyframes flash-six-red {
             0%, 100% { background-color: #0f172a; }
             8%, 25%, 41%, 58%, 75%, 91% { background-color: #dc2626; }
@@ -128,45 +129,40 @@
         }
         const database = firebase.database();
 
-        // Sintetizador de Audio Web nativo
-        let audioCtx = null;
+        // Audio de alerta optimizado
+        const sonidoNotificacion = new Audio('tonoalerta.mpeg');
 
         function reproducirAlertaSonora() {
-            try {
-                if (!audioCtx) {
-                    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-                }
-                if (audioCtx.state === 'suspended') {
-                    audioCtx.resume();
-                }
-
-                const now = audioCtx.currentTime;
-                const osc = audioCtx.createOscillator();
-                const gain = audioCtx.createGain();
-
-                osc.type = 'sine';
-                osc.frequency.setValueAtTime(587.33, now);
-                osc.frequency.setValueAtTime(880, now + 0.15);
-
-                gain.gain.setValueAtTime(0.3, now);
-                gain.gain.exponentialRampToValueAtTime(0.01, now + 0.4);
-
-                osc.connect(gain);
-                gain.connect(audioCtx.destination);
-
-                osc.start(now);
-                osc.stop(now + 0.4);
-            } catch (e) {
-                console.log("Audio bloqueado", e);
-            }
+            sonidoNotificacion.currentTime = 0;
+            sonidoNotificacion.play().catch(err => {
+                console.log("Audio en espera:", err);
+            });
         }
 
+        // Registrar Service Worker para notificaciones push en segundo plano
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('firebase-messaging-sw.js')
+                .then((reg) => {
+                    console.log('Service Worker registrado con éxito:', reg.scope);
+                })
+                .catch((err) => {
+                    console.log('Error al registrar Service Worker:', err);
+                });
+        }
+
+        // Solicitar permiso de notificaciones al primer toque
         document.addEventListener('click', () => {
-            if (!audioCtx) {
-                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-            }
-            if (audioCtx.state === 'suspended') {
-                audioCtx.resume();
+            sonidoNotificacion.play().then(() => {
+                sonidoNotificacion.pause();
+                sonidoNotificacion.currentTime = 0;
+            }).catch(e => {});
+
+            if (Notification.permission === 'default') {
+                Notification.requestPermission().then((permission) => {
+                    if (permission === 'granted') {
+                        console.log('Permiso de notificaciones concedido.');
+                    }
+                });
             }
         }, { once: true });
 
@@ -204,7 +200,7 @@
             return nombre.trim().replace(/[.#$\/\[\]]/g, "_");
         }
 
-        // Obtener Geolocalización por GPS automáticamente
+        // Geolocalización GPS automática
         function iniciarGeolocalizacion() {
             if ("geolocation" in navigator) {
                 navigator.geolocation.watchPosition(
@@ -213,10 +209,10 @@
                             lat: position.coords.latitude,
                             lng: position.coords.longitude
                         };
-                        registrarPresenciaYEscuchar(); // Actualizar con coordenadas
+                        registrarPresenciaYEscuchar();
                     },
                     (error) => {
-                        console.log("GPS no disponible o denegado:", error.message);
+                        console.log("GPS no disponible:", error.message);
                     },
                     { enableHighAccuracy: true, maximumAge: 10000, timeout: 5000 }
                 );
@@ -314,7 +310,7 @@
             bodyApp.classList.remove('flash-rojo-activo');
             void bodyApp.offsetWidth; 
             bodyApp.classList.add('flash-rojo-activo');
-            setTimeout(() => { bodyApp.classList.remove('flash-rojo-activo'); }, 2400); // Duración extendida para los 6 destellos
+            setTimeout(() => { bodyApp.classList.remove('flash-rojo-activo'); }, 2400); // 6 destellos
         }
 
         function escucharConversacion(destino) {
@@ -421,6 +417,14 @@
                 if (!estadoCenaAnterior && data.enviadoPor !== miNombre) {
                     reproducirAlertaSonora();
                     dispararFlashRojo();
+                    
+                    // Si el navegador soporta notificaciones y la app está en segundo plano, mostrar aviso nativo
+                    if (Notification.permission === 'granted') {
+                        new Notification("🚨 ¡YA ESTA LA CENA!", {
+                            body: "¡Corre a la mesa! Alerta de Familia Machuka.",
+                            icon: "https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/svgs/solid/house-chimney.svg"
+                        });
+                    }
                 }
                 estadoCenaAnterior = true;
             } else {

@@ -129,17 +129,59 @@
         }
         const database = firebase.database();
 
-        // Audio de alerta optimizado
-        const sonidoNotificacion = new Audio('tonoalerta.mpeg');
+        // Sistema de Audio Dual: Intenta reproducir tu archivo 'tonoalerta.mpeg' y si falla, usa el sintetizador web de respaldo
+        const audioFile = new Audio('tonoalerta.mpeg');
+        let audioCtx = null;
 
         function reproducirAlertaSonora() {
-            sonidoNotificacion.currentTime = 0;
-            sonidoNotificacion.play().catch(err => {
-                console.log("Audio en espera:", err);
+            // Intentar reproducir tu archivo mpeg
+            audioFile.currentTime = 0;
+            audioFile.play().catch(err => {
+                console.log("Archivo mpeg bloqueado o no compatible, usando sintetizador de respaldo...", err);
+                dispararSintetizadorRespaldo();
             });
         }
 
-        // Registrar Service Worker para notificaciones push en segundo plano
+        function dispararSintetizadorRespaldo() {
+            try {
+                if (!audioCtx) {
+                    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                }
+                if (audioCtx.state === 'suspended') {
+                    audioCtx.resume();
+                }
+
+                const now = audioCtx.currentTime;
+                
+                // Primer golpe de timbre
+                const osc1 = audioCtx.createOscillator();
+                const gain1 = audioCtx.createGain();
+                osc1.type = 'sine';
+                osc1.frequency.setValueAtTime(659.25, now);
+                gain1.gain.setValueAtTime(0.5, now);
+                gain1.gain.exponentialRampToValueAtTime(0.01, now + 0.2);
+                osc1.connect(gain1);
+                gain1.connect(audioCtx.destination);
+                osc1.start(now);
+                osc1.stop(now + 0.2);
+
+                // Segundo golpe de timbre
+                const osc2 = audioCtx.createOscillator();
+                const gain2 = audioCtx.createGain();
+                osc2.type = 'sine';
+                osc2.frequency.setValueAtTime(880, now + 0.2);
+                gain2.gain.setValueAtTime(0.5, now + 0.2);
+                gain2.gain.exponentialRampToValueAtTime(0.01, now + 0.5);
+                osc2.connect(gain2);
+                gain2.connect(audioCtx.destination);
+                osc2.start(now + 0.2);
+                osc2.stop(now + 0.5);
+            } catch (e) {
+                console.log("Error en sintetizador de respaldo:", e);
+            }
+        }
+
+        // Registrar Service Worker
         if ('serviceWorker' in navigator) {
             navigator.serviceWorker.register('firebase-messaging-sw.js')
                 .then((reg) => {
@@ -150,11 +192,18 @@
                 });
         }
 
-        // Solicitar permiso de notificaciones al primer toque
+        // Desbloquear audio y permisos al primer toque en la pantalla
         document.addEventListener('click', () => {
-            sonidoNotificacion.play().then(() => {
-                sonidoNotificacion.pause();
-                sonidoNotificacion.currentTime = 0;
+            if (!audioCtx) {
+                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            }
+            if (audioCtx.state === 'suspended') {
+                audioCtx.resume();
+            }
+
+            audioFile.play().then(() => {
+                audioFile.pause();
+                audioFile.currentTime = 0;
             }).catch(e => {});
 
             if (Notification.permission === 'default') {
@@ -269,8 +318,8 @@
                     }
                 });
 
-                const otros = listaFamiliaresConectados.filter(n => limpiarNombre(n) !== limpiarNombre(miNombre));
-                if (otros.length === 0) {
+                const outros = listaFamiliaresConectados.filter(n => limpiarNombre(n) !== limpiarNombre(miNombre));
+                if (outros.length === 0) {
                     userPresenceSub.innerText = "Esperando a otros familiares...";
                 } else {
                     userPresenceSub.innerText = `En línea (${listaFamiliaresConectados.length}): ${listaFamiliaresConectados.join(", ")}`;
@@ -418,7 +467,6 @@
                     reproducirAlertaSonora();
                     dispararFlashRojo();
                     
-                    // Si el navegador soporta notificaciones y la app está en segundo plano, mostrar aviso nativo
                     if (Notification.permission === 'granted') {
                         new Notification("🚨 ¡YA ESTA LA CENA!", {
                             body: "¡Corre a la mesa! Alerta de Familia Machuka.",
